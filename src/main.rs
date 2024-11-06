@@ -81,7 +81,11 @@ fn install_modules(project_name: &str, modules: Vec<String>) -> Result<(), Box<d
     Ok(())
 }
 
-fn create_project(project_name: &str, modules: Vec<String>) -> Result<(), Box<dyn Error>> {
+fn create_project(
+    project_name: &str,
+    modules: Vec<String>,
+    ide: &str,
+) -> Result<(), Box<dyn Error>> {
     // create project directory
     fs::create_dir(project_name)?;
 
@@ -108,6 +112,20 @@ fn create_project(project_name: &str, modules: Vec<String>) -> Result<(), Box<dy
     // install modules
     install_modules(project_name, modules)?;
 
+    // open project in IDE
+    match ide {
+        "vscode" => {
+            Command::new("code").arg(project_name).spawn()?;
+        }
+        "pycharm" => {
+            Command::new("charm").arg(project_name).spawn()?;
+        }
+        "zed" => {
+            Command::new("zed").arg(project_name).spawn()?;
+        }
+        _ => {}
+    }
+
     Ok(())
 }
 
@@ -116,16 +134,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let project_name: String = matches.get_one::<String>("name").unwrap().clone();
 
-    let ide: String =
-        if matches.value_source("vscode") == Some(clap::parser::ValueSource::CommandLine) {
-            "vscode".to_string()
-        } else if matches.value_source("pycharm") == Some(clap::parser::ValueSource::CommandLine) {
-            "pycharm".to_string()
-        } else if matches.value_source("zed") == Some(clap::parser::ValueSource::CommandLine) {
-            "zed".to_string()
-        } else {
-            "".to_string()
-        };
+    let ide: &str = ["vscode", "pycharm", "zed"]
+        .iter()
+        .find(|&&ide| matches.value_source(ide) == Some(clap::parser::ValueSource::CommandLine))
+        .unwrap_or(&"");
 
     let modules: Vec<String> = matches
         .get_many::<String>("modules")
@@ -139,7 +151,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into_iter()
         .collect();
 
-    println!("IDE: {}", ide);
-    create_project(&project_name, modules)?;
+    create_project(&project_name, modules, ide)?;
     Ok(())
 }
