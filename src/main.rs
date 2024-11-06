@@ -50,10 +50,8 @@ fn matches() -> clap::ArgMatches {
         .get_matches();
 }
 
-fn upgrade_pip() -> Result<(), Box<dyn Error>> {
-    let upgrade_pip: ExitStatus = Command::new("python3")
-        .arg("-m")
-        .arg("pip")
+fn upgrade_pip(project_name: &str) -> Result<(), Box<dyn Error>> {
+    let upgrade_pip: ExitStatus = Command::new(format!("{}/.venv/bin/pip3", project_name))
         .arg("install")
         .arg("--upgrade")
         .arg("pip")
@@ -107,7 +105,7 @@ fn create_project(
     );
 
     // upgrade pip
-    upgrade_pip()?;
+    upgrade_pip(project_name)?;
 
     // install modules
     install_modules(project_name, modules)?;
@@ -121,7 +119,7 @@ fn create_project(
             Command::new("charm").arg(project_name).spawn()?;
         }
         "zed" => {
-            Command::new("zed").arg(project_name).spawn()?;
+            Command::new("zeditor").arg(project_name).spawn()?;
         }
         _ => {}
     }
