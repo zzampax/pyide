@@ -50,6 +50,36 @@ fn matches() -> clap::ArgMatches {
         .get_matches();
 }
 
+fn upgrade_pip() -> Result<(), Box<dyn Error>> {
+    let upgrade_pip: ExitStatus = Command::new("python3")
+        .arg("-m")
+        .arg("pip")
+        .arg("install")
+        .arg("--upgrade")
+        .arg("pip")
+        .spawn()?
+        .wait()?;
+
+    if !upgrade_pip.success() {
+        return Err(Box::from("Failed to upgrade pip"));
+    }
+
+    Ok(())
+}
+
+fn install_modules(project_name: &str, modules: Vec<String>) -> Result<(), Box<dyn Error>> {
+    let install_modules: ExitStatus = Command::new(format!("{}/.venv/bin/pip3", project_name))
+        .arg("install")
+        .args(&modules)
+        .spawn()?
+        .wait()?;
+
+    if !install_modules.success() {
+        return Err(Box::from("Failed to install modules"));
+    }
+
+    Ok(())
+}
 
 fn create_project(project_name: &str, modules: Vec<String>) -> Result<(), Box<dyn Error>> {
     // create project directory
@@ -72,18 +102,11 @@ fn create_project(project_name: &str, modules: Vec<String>) -> Result<(), Box<dy
         project_name
     );
 
+    // upgrade pip
+    upgrade_pip()?;
+
     // install modules
-    let install_modules: ExitStatus = Command::new(format!("{}/.venv/bin/pip3", project_name))
-        .arg("install")
-        .args(&modules)
-        .spawn()?
-        .wait()?;
-
-    println!("Installed modules: {:?}", &modules);
-
-    if !install_modules.success() {
-        return Err(Box::from("Failed to install modules"));
-    }
+    install_modules(project_name, modules)?;
 
     Ok(())
 }
