@@ -2,6 +2,7 @@ use clap::{command, Arg};
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
+use std::process::{Command, ExitStatus};
 
 fn matches() -> clap::ArgMatches {
     return command!()
@@ -49,18 +50,20 @@ fn matches() -> clap::ArgMatches {
         .get_matches();
 }
 
+
 fn create_project(project_name: &str, modules: Vec<String>) -> Result<(), Box<dyn Error>> {
     // create project directory
     fs::create_dir(project_name)?;
 
     // create virtual environment
-    let venv = std::process::Command::new("python3")
+    let venv: ExitStatus = Command::new("python3")
         .arg("-m")
         .arg("venv")
         .arg(format!("{}/.venv", project_name))
-        .output()?;
+        .spawn()?
+        .wait()?;
 
-    if !venv.status.success() {
+    if !venv.success() {
         return Err(Box::from("Failed to create virtual environment"));
     }
 
@@ -70,14 +73,15 @@ fn create_project(project_name: &str, modules: Vec<String>) -> Result<(), Box<dy
     );
 
     // install modules
-    let install_modules = std::process::Command::new(format!("{}/.venv/bin/pip3", project_name))
+    let install_modules: ExitStatus = Command::new(format!("{}/.venv/bin/pip3", project_name))
         .arg("install")
         .args(&modules)
-        .output()?;
+        .spawn()?
+        .wait()?;
 
     println!("Installed modules: {:?}", &modules);
 
-    if !install_modules.status.success() {
+    if !install_modules.success() {
         return Err(Box::from("Failed to install modules"));
     }
 
