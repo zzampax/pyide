@@ -161,9 +161,21 @@ fn open_ide(project_name: &str, ide: &str) -> Result<(), Box<dyn Error>> {
     println!("Opening project in {}", ide);
 
     let open_ide: ExitStatus = match ide {
-        "vscode" => Command::new("code").arg(project_name).spawn()?.wait()?,
-        "pycharm" => Command::new("charm").arg(project_name).spawn()?.wait()?,
-        "zed" => Command::new("zeditor").arg(project_name).spawn()?.wait()?,
+        "vscode" => Command::new("code")
+            .arg("-n")
+            .arg(project_name)
+            .spawn()?
+            .wait()?,
+        "pycharm" => Command::new("charm")
+            .arg("-n")
+            .arg(project_name)
+            .spawn()?
+            .wait()?,
+        "zed" => Command::new("zeditor")
+            .arg("-n")
+            .arg(project_name)
+            .spawn()?
+            .wait()?,
         _ => return Ok(()),
     };
 
