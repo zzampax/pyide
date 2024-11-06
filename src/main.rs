@@ -1,7 +1,8 @@
 use clap::{command, Arg};
 use std::collections::HashSet;
 use std::error::Error;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
 use std::process::{Command, ExitStatus};
 
 fn matches() -> clap::ArgMatches {
@@ -50,6 +51,53 @@ fn matches() -> clap::ArgMatches {
         .get_matches();
 }
 
+fn init_git(project_name: &str) -> Result<(), Box<dyn Error>> {
+    let init_git: ExitStatus = Command::new("git")
+        .arg("init")
+        .arg(project_name)
+        .spawn()?
+        .wait()?;
+
+    if !init_git.success() {
+        return Err(Box::from("Failed to initialize git"));
+    }
+
+    // Create .gitignore file
+    let gitignore: ExitStatus = Command::new("sh")
+        .arg("-c")
+        .arg(format!("echo '.venv' > {}/.gitignore", project_name))
+        .spawn()?
+        .wait()?;
+
+    if !gitignore.success() {
+        return Err(Box::from("Failed to create .gitignore file"));
+    }
+
+    println!("Git repository initialized in {}", project_name);
+
+    Ok(())
+}
+
+fn create_venv(project_name: &str) -> Result<(), Box<dyn Error>> {
+    let venv: ExitStatus = Command::new("python3")
+        .arg("-m")
+        .arg("venv")
+        .arg(format!("{}/.venv", project_name))
+        .spawn()?
+        .wait()?;
+
+    if !venv.success() {
+        return Err(Box::from("Failed to create virtual environment"));
+    }
+
+    println!(
+        "Python3 Virtual environment created in {}/.venv",
+        project_name
+    );
+
+    Ok(())
+}
+
 fn upgrade_pip(project_name: &str) -> Result<(), Box<dyn Error>> {
     let upgrade_pip: ExitStatus = Command::new(format!("{}/.venv/bin/pip3", project_name))
         .arg("install")
@@ -79,30 +127,71 @@ fn install_modules(project_name: &str, modules: Vec<String>) -> Result<(), Box<d
     Ok(())
 }
 
+fn check_ide(ide: &str) -> Result<(), Box<dyn Error>> {
+    let cmd_str: &str = match ide {
+        "vscode" => "code",
+        "pycharm" => "charm",
+        "zed" => "zeditor",
+        _ => return Ok(()),
+    };
+
+    let check_ide: ExitStatus = match Command::new(cmd_str).arg("--version").spawn() {
+        Ok(mut cmd) => cmd.wait()?,
+        Err(_) => return Err(Box::from("IDE not installed")),
+    };
+
+    if !check_ide.success() {
+        return Err(Box::from("IDE not installed"));
+    }
+
+    Ok(())
+}
+
+fn create_main(project_name: &str) -> Result<(), Box<dyn Error>> {
+    let mut main_file = File::create(format!("{}/main.py", project_name))?;
+    main_file.write_all(b"print('Hello, World!')")?;
+
+    Ok(())
+}
+
+fn open_ide(project_name: &str, ide: &str) -> Result<(), Box<dyn Error>> {
+    // check if IDE is installed
+    check_ide(ide)?;
+
+    println!("Opening project in {}", ide);
+
+    let open_ide: ExitStatus = match ide {
+        "vscode" => Command::new("code").arg(project_name).spawn()?.wait()?,
+        "pycharm" => Command::new("charm").arg(project_name).spawn()?.wait()?,
+        "zed" => Command::new("zeditor").arg(project_name).spawn()?.wait()?,
+        _ => return Ok(()),
+    };
+
+    if !open_ide.success() {
+        return Err(Box::from("Failed to open IDE"));
+    }
+
+    Ok(())
+}
+
 fn create_project(
     project_name: &str,
     modules: Vec<String>,
     ide: &str,
 ) -> Result<(), Box<dyn Error>> {
+    // check if project already exists
+    if fs::metadata(project_name).is_ok() {
+        return Err(Box::from("Project already exists"));
+    }
+
     // create project directory
     fs::create_dir(project_name)?;
 
+    // initialize git
+    init_git(project_name)?;
+
     // create virtual environment
-    let venv: ExitStatus = Command::new("python3")
-        .arg("-m")
-        .arg("venv")
-        .arg(format!("{}/.venv", project_name))
-        .spawn()?
-        .wait()?;
-
-    if !venv.success() {
-        return Err(Box::from("Failed to create virtual environment"));
-    }
-
-    println!(
-        "Python3 Virtual environment created in {}/.venv",
-        project_name
-    );
+    create_venv(project_name)?;
 
     // upgrade pip
     upgrade_pip(project_name)?;
@@ -110,19 +199,11 @@ fn create_project(
     // install modules
     install_modules(project_name, modules)?;
 
+    // create main.py
+    create_main(project_name)?;
+
     // open project in IDE
-    match ide {
-        "vscode" => {
-            Command::new("code").arg(project_name).spawn()?;
-        }
-        "pycharm" => {
-            Command::new("charm").arg(project_name).spawn()?;
-        }
-        "zed" => {
-            Command::new("zeditor").arg(project_name).spawn()?;
-        }
-        _ => {}
-    }
+    open_ide(project_name, ide)?;
 
     Ok(())
 }
