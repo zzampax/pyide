@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# This script is used to generate the list of all the files needed for a new complete python project
+# It has to be run as follows:
+# pypr <project_name> -m <module1> <module2> ... <moduleN>
+# The first parameter is the name of the project (if not provided, exit)
+# The -m flag is used to specify the modules to install
+# The modules are installed in the virtual environment created in the current directory
+# The script also creates a pyproject.toml file with the configuration for the pyright linter
+# If -o is provided, the installed packages will be saved to installed_packages.txt
+# The project is opened in the Zed code editor by default, unless --no-editor is provided
+#
+# If -h is provided, the script will print the help message
+
+# Store the initial working directory
+initial_working_dir=$(pwd)
+
+# Function to handle cleanup on SIGINT (Ctrl+C)
+cleanup() {
+    echo "==> Interrupt received. Cleaning up..."
+    deactivate 2>/dev/null
+
+    # Ensure we're back to the initial working directory before deleting
+    cd "$initial_working_dir" || { echo "==> Failed to return to initial directory. Aborting cleanup."; exit 1; }
+
+    if [ -d "$project_name" ]; then
+        rm -rf "$project_name"
+        echo "==> Project directory $project_name removed."
+    fi
+    exit 1
+}
+
+# Trap SIGINT signal (Ctrl+C)
+trap cleanup SIGINT
+
+# Check if the first argument is -h or --help
+if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+    echo -e "==> Usage: pypr <project_name>\n\t -m <module1> <module2> ... <moduleN> (optional)\n\t --no-pyright (optional)\n\t -o (optional, save installed packages to installed_packages.txt)\n\t -h or --help to print this message"
+    exit 0
+fi
+
+# Check if at least one argument (project_name) is provided
+if [ $# -lt 1 ]; then
+    echo "==> Usage: pypr <project_name>"
+    exit 1
+fi
+
+project_name=$1
+shift
+
+echo "==> Creating project $project_name"
+mkdir "$project_name"
+cd "$project_name" || { echo "==> Failed to enter project directory"; exit 1; }
+
+echo "==> Creating virtual environment"
+python3 -m venv .venv
+source .venv/bin/activate
+
+echo "==> Installing modules"
+pip install --upgrade pip
+
+# Flags for optional operations
+install_modules=false
+output_installed_packages=false
+no_pyright=false
+open_in_zed=true
+
+# Iterate over the remaining arguments
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -m)
+            install_modules=true
+            shift
+            ;;
+        --no-pyright)
+            no_pyright=true
+            shift
+            ;;
+        -o)
+            output_installed_packages=true
+            shift
+            ;;
+        --no-editor)
+            open_in_zed=false
+            shift
+            ;;
+        *)
+            if [ "$install_modules" = true ]; then
+                pip install "$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Save installed packages to installed_packages.txt if -o was provided
+if [ "$output_installed_packages" = true ]; then
+    echo "==> Saving installed packages to installed_packages.txt"
+    pip freeze > installed_packages.txt
+fi
+
+deactivate
+
+# Create pyproject.toml unless --no-pyright was provided
+if [ "$no_pyright" = false ]; then
+    echo "==> Creating pyproject.toml file (for pyright in IDEs)"
+    cat <<EOF > pyproject.toml
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+EOF
+fi
+
+# Create a main.py file
+touch main.py
+
+if [ "$open_in_zed" = true ]; then
+    echo "==> Opening project in Zed code editor"
+    zeditor .
+fi
+
+# Cleanup the trap before exiting normally
+trap - SIGINT
+echo "==> Project setup complete."
