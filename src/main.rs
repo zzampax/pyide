@@ -122,6 +122,10 @@ fn upgrade_pip(project_name: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn install_modules(project_name: &str, modules: Vec<String>) -> Result<(), Box<dyn Error>> {
+    if modules.is_empty() {
+        return Ok(());
+    }
+
     let install_modules: ExitStatus = Command::new(format!("{}/.venv/bin/pip3", project_name))
         .arg("install")
         .args(&modules)
