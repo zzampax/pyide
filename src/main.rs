@@ -2,7 +2,7 @@ use clap::{command, Arg};
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::process::{Command, ExitStatus};
 
 fn matches() -> clap::ArgMatches {
@@ -23,6 +23,14 @@ fn matches() -> clap::ArgMatches {
                 .help("Pip3 modules to install in the Project (separated by spaces) e.g. numpy pandas")
                 .required(false)
                 .num_args(1..),
+        )
+        .arg(
+            Arg::new("file")
+                .short('f')
+                .long("file")
+                .help("Pip3 modules to install in the Project (separated by new lines) [OVERWRITES --modules]")
+                .required(false)
+                .num_args(1),
         )
         .arg(
             Arg::new("vscode")
@@ -230,10 +238,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         .find(|&&ide| matches.value_source(ide) == Some(clap::parser::ValueSource::CommandLine))
         .unwrap_or(&"");
 
-    let modules: Vec<String> = matches
+    let mut modules: Vec<String>;
+    modules = matches
         .get_many::<String>("modules")
         .map(|vals| vals.cloned().collect())
         .unwrap_or_default();
+
+    let file: String = matches
+        .get_one::<String>("file")
+        .unwrap_or(&"".to_string())
+        .clone();
+
+    if !file.is_empty() {
+        let file = File::open(&file)?;
+        let reader = std::io::BufReader::new(file);
+        for line in reader.lines() {
+            let line = line?;
+            modules.push(line);
+        }
+    }
 
     // remove duplicates
     let modules: Vec<String> = modules
