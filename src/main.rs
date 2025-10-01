@@ -155,7 +155,7 @@ fn check_ide(ide: &str) -> Result<(), Box<dyn Error>> {
         "vscode" => "code",
         "pycharm" => "charm",
         "zed" => "zeditor",
-        _ => return Ok(()) //Err(Box::from("No IDE selected")),
+        _ => return Err(Box::from(format!("No valid IDE selected: {}", ide))),
     };
 
     let check_ide: ExitStatus = match Command::new(cmd_str).arg("--version").spawn() {
