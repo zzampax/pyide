@@ -8,7 +8,7 @@ use std::process::{Command, ExitStatus};
 fn matches() -> clap::ArgMatches {
     return command!()
         .name("PyIDE Python Project setup")
-        .version("1.0.1")
+        .version("1.0.2")
         .about("Setup a Python IDE project")
         .arg(
             Arg::new("name")
@@ -25,6 +25,22 @@ fn matches() -> clap::ArgMatches {
                 .num_args(1..),
         )
         .arg(
+            Arg::new("uv-python")
+                .short('u')
+                .long("uv-python")
+                .help("Use 'uv' to create the virtual environment and install packages. It'll use pip if uv is not installed (default)")
+                .required(false)
+                .num_args(0),
+        )
+        .arg(
+            Arg::new("pip")
+                .short('p')
+                .long("pip")
+                .help("Use 'pip' to install packages")
+                .required(false)
+                .num_args(0),
+        )
+        .arg(
             Arg::new("file")
                 .short('f')
                 .long("file")
@@ -33,28 +49,12 @@ fn matches() -> clap::ArgMatches {
                 .num_args(1),
         )
         .arg(
-            Arg::new("vscode")
-                .short('c')
-                .long("code")
-                .help("Open the project in Visual Studio Code as soon as it is created")
+            Arg::new("ide")
+                .short('i')
+                .long("ide")
+                .help("IDE to open the project with as soon as it's created (vscode, pycharm, zed)")
                 .required(false)
-                .num_args(0),
-        )
-        .arg(
-            Arg::new("pycharm")
-                .short('p')
-                .long("pycharm")
-                .help("Open the project in PyCharm as soon as it is created")
-                .required(false)
-                .num_args(0),
-        )
-        .arg(
-            Arg::new("zed")
-                .short('z')
-                .long("zed")
-                .help("Open the project in Zed as soon as it is created")
-                .required(false)
-                .num_args(0),
+                .num_args(1),
         )
         .get_matches();
 }
@@ -86,55 +86,66 @@ fn init_git(project_name: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn create_venv(project_name: &str) -> Result<(), Box<dyn Error>> {
-    let venv: ExitStatus = Command::new("python3")
-        .arg("-m")
-        .arg("venv")
-        .arg(format!("{}/.venv", project_name))
-        .spawn()?
-        .wait()?;
-
-    if !venv.success() {
-        return Err(Box::from("Failed to create virtual environment"));
-    }
+fn create_venv(project_name: &str, check_venv: &str) -> Result<(), Box<dyn Error>> {
+    match check_venv {
+        "uv-python" => Command::new("uv")
+            .arg("venv")
+            .arg(format!("{}/.venv", project_name))
+            .spawn()?
+            .wait()?,
+        "pip" => Command::new("python3")
+            .arg("-m")
+            .arg("venv")
+            .arg(format!("{}/.venv", project_name))
+            .spawn()?
+            .wait()?,
+        _ => return Err(Box::from("Failed to create virtual environment")),
+    };
 
     println!(
-        "Python3 Virtual environment created in {}/.venv",
+        "Virtual environment created in {}/.venv",
         project_name
     );
 
     Ok(())
 }
 
-fn upgrade_pip(project_name: &str) -> Result<(), Box<dyn Error>> {
-    let upgrade_pip: ExitStatus = Command::new(format!("{}/.venv/bin/pip3", project_name))
-        .arg("install")
-        .arg("--upgrade")
-        .arg("pip")
-        .spawn()?
-        .wait()?;
-
-    if !upgrade_pip.success() {
-        return Err(Box::from("Failed to upgrade pip"));
-    }
+fn upgrade_pip(project_name: &str, check_venv: &str) -> Result<(), Box<dyn Error>> {
+    match check_venv {
+        "uv-python" => Command::new("uv")
+            .args(["pip", "--directory", &format!("{}/.venv", project_name), "install", "--upgrade", "pip"])
+            .spawn()?
+            .wait()?,
+        "pip" => Command::new(format!("{}/.venv/bin/pip3", project_name))
+            .arg("install")
+            .arg("--upgrade")
+            .arg("pip")
+            .spawn()?
+            .wait()?,
+        _ => return Err(Box::from("Failed to upgrade pip")),
+    };
 
     Ok(())
 }
 
-fn install_modules(project_name: &str, modules: Vec<String>) -> Result<(), Box<dyn Error>> {
+fn install_modules(project_name: &str, modules: Vec<String>, check_venv: &str) -> Result<(), Box<dyn Error>> {
     if modules.is_empty() {
         return Ok(());
     }
 
-    let install_modules: ExitStatus = Command::new(format!("{}/.venv/bin/pip3", project_name))
-        .arg("install")
-        .args(&modules)
-        .spawn()?
-        .wait()?;
-
-    if !install_modules.success() {
-        return Err(Box::from("Failed to install modules"));
-    }
+    match check_venv {
+        "uv-python" => Command::new("uv")
+            .args(["pip", "--directory", &format!("{}/.venv", project_name), "install"])
+            .args(&modules)
+            .spawn()?
+            .wait()?,
+        "pip" => Command::new(format!("{}/.venv/bin/pip3", project_name))
+            .arg("install")
+            .args(&modules)
+            .spawn()?
+            .wait()?,
+        _ => return Err(Box::from("Failed to install modules")),
+    };
 
     Ok(())
 }
@@ -144,7 +155,7 @@ fn check_ide(ide: &str) -> Result<(), Box<dyn Error>> {
         "vscode" => "code",
         "pycharm" => "charm",
         "zed" => "zeditor",
-        _ => return Ok(()),
+        _ => return Err(Box::from("No IDE selected")),
     };
 
     let check_ide: ExitStatus = match Command::new(cmd_str).arg("--version").spawn() {
@@ -202,6 +213,7 @@ fn create_project(
     project_name: &str,
     modules: Vec<String>,
     ide: &str,
+    venv: &str,
 ) -> Result<(), Box<dyn Error>> {
     // check if project already exists
     if fs::metadata(project_name).is_ok() {
@@ -215,13 +227,13 @@ fn create_project(
     init_git(project_name)?;
 
     // create virtual environment
-    create_venv(project_name)?;
+    create_venv(project_name, &venv)?;
 
     // upgrade pip
-    upgrade_pip(project_name)?;
+    upgrade_pip(project_name, &venv)?;
 
     // install modules
-    install_modules(project_name, modules)?;
+    install_modules(project_name, modules, &venv)?;
 
     // create main.py
     create_main(project_name)?;
@@ -237,16 +249,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let project_name: String = matches.get_one::<String>("name").unwrap().clone();
 
-    let ide: &str = ["vscode", "pycharm", "zed"]
-        .iter()
-        .find(|&&ide| matches.value_source(ide) == Some(clap::parser::ValueSource::CommandLine))
-        .unwrap_or(&"");
-
     let mut modules: Vec<String>;
     modules = matches
         .get_many::<String>("modules")
         .map(|vals| vals.cloned().collect())
         .unwrap_or_default();
+
+    let ide: &str = matches
+        .get_one::<String>("ide")
+        .map(|s| s.as_str())
+        .unwrap_or("");
+
+    let venv: &str = ["uv-python", "pip"]
+        .iter()
+        .find(|&&venv| matches.value_source(venv) == Some(clap::parser::ValueSource::CommandLine))
+        .unwrap_or(&"uv-python");
 
     let file: String = matches
         .get_one::<String>("file")
@@ -269,6 +286,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into_iter()
         .collect();
 
-    create_project(&project_name, modules, ide)?;
+    create_project(&project_name, modules, ide, venv)?;
     Ok(())
 }
