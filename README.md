@@ -31,19 +31,23 @@ For more specific information:
 ```bash
 $ ./pyide --help
 ```
-Optionally you can specify the editor you want to use:
-### Visual Studio Code
+Optionally you can specify the Python package and project manager you want to use:
+### `uv-python`
 ```bash
-$ ./pyide <project_name> -m <modules> -c
+$ ./pyide <project_name> -m <modules> -u
 ```
-### PyCharm
+### `pip`
 ```bash
 $ ./pyide <project_name> -m <modules> -p
 ```
-### Zed
+It's also possible to specify the editor you'd like to use:
 ```bash
-$ ./pyide <project_name> -m <modules> -z
+$ ./pyide <project_name> -m <modules> -i <editor>
 ```
+Where `<editor>` can be one of the following:
+- `vscode`
+- `pycharm`
+- `zed`
 ## Compilation
 ```bash
 $ cargo build --release
