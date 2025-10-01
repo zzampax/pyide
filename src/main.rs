@@ -8,7 +8,7 @@ use std::process::{Command, ExitStatus};
 fn matches() -> clap::ArgMatches {
     return command!()
         .name("PyIDE Python Project setup")
-        .version("1.0.2")
+        .version("1.1.0")
         .about("Setup a Python IDE project")
         .arg(
             Arg::new("name")
