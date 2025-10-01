@@ -8,7 +8,7 @@ use std::process::{Command, ExitStatus};
 fn matches() -> clap::ArgMatches {
     return command!()
         .name("PyIDE Python Project setup")
-        .version("1.1.0")
+        .version("1.1.1")
         .about("Setup a Python IDE project")
         .arg(
             Arg::new("name")
@@ -155,7 +155,7 @@ fn check_ide(ide: &str) -> Result<(), Box<dyn Error>> {
         "vscode" => "code",
         "pycharm" => "charm",
         "zed" => "zeditor",
-        _ => return Err(Box::from("No IDE selected")),
+        _ => return Ok(()) //Err(Box::from("No IDE selected")),
     };
 
     let check_ide: ExitStatus = match Command::new(cmd_str).arg("--version").spawn() {
@@ -239,7 +239,7 @@ fn create_project(
     create_main(project_name)?;
 
     // open project in IDE
-    open_ide(project_name, ide)?;
+    if !ide.is_empty() { open_ide(project_name, ide)?; }
 
     Ok(())
 }
